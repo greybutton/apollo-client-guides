@@ -2,126 +2,126 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import ApolloClient from "apollo-boost";
 import gql from "graphql-tag";
-import { ApolloProvider, Query, ApolloConsumer } from "react-apollo";
+import { ApolloProvider, Query, Mutation } from "react-apollo";
 
 import './index.css';
 import registerServiceWorker from './registerServiceWorker';
 
 const client = new ApolloClient({
-  uri: "https://nx9zvp49q7.lp.gql.zone/graphql"
+  uri: "https://8v9r9kpn7q.lp.gql.zone/graphql"
 });
 
-const GET_DOGS = gql`
+const ADD_TODO = gql`
+  mutation AddTodo($type: String!) {
+    addTodo(type: $type) {
+      id
+      type
+    }
+  }
+`;
+
+const GET_TODOS = gql`
   {
-    dogs {
+    todos {
       id
-      breed
+      type
     }
   }
 `;
 
-const GET_DOG_PHOTO = gql`
-  query Dog($breed: String!) {
-    dog(breed: $breed) {
+const UPDATE_TODO = gql`
+  mutation UpdateTodo($id: String!, $type: String!) {
+    updateTodo(id: $id, type: $type) {
       id
-      displayImage
+      type
     }
   }
 `;
 
-const Dogs = ({ onDogSelected }) => (
-  <Query query={GET_DOGS}>
-    {({ loading, error, data }) => {
-      if (loading) return 'Loading...';
-      if (error) return `Error! ${error.message}`;
+const AddTodo = () => {
+  let input;
 
-      return (
-        <select name="dog" onChange={onDogSelected}>
-          {data.dogs.map(dog => (
-            <option key={dog.id} value={dog.breed}>
-              {dog.breed}
-            </option>
-          ))}
-        </select>
-      );
-    }}
-  </Query>
-);
-
-const DogPhoto = ({ breed }) => (
-  <Query query={GET_DOG_PHOTO} variables={{ breed }} notifyOnNetworkStatusChange>
-    {({ loading, error, data, refetch, networkStatus }) => {
-      if (networkStatus === 4) return "Refetching!";
-      if (loading) return 'Loading...';
-      if (error) return `Error! ${error.message}`;
-
-      return (
+  return (
+    <Mutation 
+      mutation={ADD_TODO}
+      update={(cache, { data: { addTodo } }) => {
+        const { todos } = cache.readQuery({ query: GET_TODOS });
+        cache.writeQuery({
+          query: GET_TODOS,
+          data: { todos: todos.concat([addTodo]) }
+        });
+      }}
+    >
+      {addTodo => (
         <div>
-          <img src={data.dog.displayImage} style={{ height: 100, width: 100 }} />
-          <button onClick={() => refetch()}>Refetch!</button>
-        </div>
-      );
-    }}
-  </Query>
-);
-
-class DelayedQuery extends React.Component {
-  state = { dog: null };
-
-  onDogFetched = dog => this.setState(() => ({ dog }));
-
-  render() {
-    return (
-      <ApolloConsumer>
-        {client => (
-          <div>
-            {this.state.dog && <img src={this.state.dog.displayImage} />}
-            <button
-              onClick={async () => {
-                const { data } = await client.query({
-                  query: GET_DOG_PHOTO,
-                  variables: { breed: "bulldog" }
-                });
-                this.onDogFetched(data.dog);
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              addTodo({ variables: { type: input.value } });
+              input.value = "";
+            }}
+          >
+            <input
+              ref={node => {
+                input = node;
               }}
-            >
-              Click me!
-            </button>
-          </div>
-        )}
-      </ApolloConsumer>
-    );
-  }
-}
-
-class App extends React.Component {
-  state = { selectedDog: null };
-
-  onDogSelected = ({ target }) => {
-    this.setState(() => ({ selectedDog: target.value }));
-  };
-
-  render() {
-    return (
-      <ApolloProvider client={client}>
-        <DelayedQuery />
-        <div>
-          <h2>Building Query components 🚀</h2>
-          {this.state.selectedDog && (
-            <DogPhoto breed={this.state.selectedDog} />
-          )}
-          <Dogs onDogSelected={this.onDogSelected} />
+            />
+            <button type="submit">Add Todo</button>
+          </form>
         </div>
-      </ApolloProvider>
-    );
-  }
-}
+      )}
+    </Mutation>
+  );
+};
 
+const Todos = () => (
+  <Query query={GET_TODOS}>
+    {({ loading, error, data }) => {
+      if (loading) return <p>Loading...</p>;
+      if (error) return <p>Error :(</p>;
+
+      return data.todos.map(({ id, type }) => {
+        let input;
+
+        return (
+          <Mutation mutation={UPDATE_TODO} key={id}>
+            {(updateTodo, { loading, error }) => (
+              <div>
+                <p>{type}</p>
+                <form
+                  onSubmit={e => {
+                    e.preventDefault();
+                    updateTodo({ variables: { id, type: input.value } });
+
+                    input.value = "";
+                  }}
+                >
+                  <input
+                    ref={node => {
+                      input = node;
+                    }}
+                  />
+                  <button type="submit">Update Todo</button>
+                </form>
+                {loading && <p>Loading...</p>}
+                {error && <p>Error :( Please try again</p>}
+              </div>
+            )}
+          </Mutation>
+        );
+      });
+    }}
+  </Query>
+);
 
 ReactDOM.render(
-  <div>
-    <App />
-  </div>,
+  <ApolloProvider client={client}>
+    <div>
+      <h2>Building Mutation components 🚀</h2>
+      <AddTodo />
+      <Todos />
+    </div>
+  </ApolloProvider>,
   document.getElementById('root')
 );
 registerServiceWorker();
